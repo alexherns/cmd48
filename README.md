@@ -8,4 +8,5 @@ Simply download app.py and you're good to go!
 Run "python app.py" to get started
 * Left, right, up, down arrows control the motion of the tiles
 * Press "q" to exit the game
+
 That's it!
