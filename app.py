@@ -2,7 +2,7 @@ import curses
 import random
 
 def collapse_tiles(l):
-    """Collapses list of 4 tiles in 2048-style"""
+    """Collapse list of 4 tiles in 2048-style"""
     l= [val for val in l if val]
     output= []
     while len(l) >= 2:
@@ -18,28 +18,12 @@ def collapse_tiles(l):
         output.append(0)
     return output
 
-class Cursor(object):
-
-    def __init__(self, y, x):
-        self.x= x
-        self.y= y
-        self.text= ' '
-
-    def move_left(self, x=1):
-        self.x-= x
-
-    def move_right(self, x=1):
-        self.x+= x
-
-    def move_up(self, y=1):
-        self.y-= y
-
-    def move_down(self, y=1):
-        self.y+= y
-
 class Grid(object):
+    """The Grid maintains the tiles and functions necessary for playing the
+    game."""
 
     def __init__(self, scr, x=1, y=1, rows=4, cols=4, width=3, height=2):
+        """Initialize a grid of cells"""
         self.x= x
         self.y= y
         self.rows= rows
@@ -49,33 +33,12 @@ class Grid(object):
         self.parent= scr
         self.won= False
         self.window= scr.subwin(rows*height, cols*width, y, x)
-        self.drawgrid()
+        self.window.border()
         self.cells= [[0 for _ in range(cols)] for _2 in range(rows)]
         self.create_cells()
 
-    def drawgrid(self):
-        self.window.border()
-
-    def create_cells(self):
-        for i in xrange(len(self.cells)):
-            for j in xrange(len(self.cells[i])):
-                self.cells[i][j]= Cell(self.window, self.height, self.width, 
-                        self.y+i*self.height, self.x+j*self.width)
-
-    def __iter__(self):
-        for i in xrange(len(self.cells)):
-            for j in xrange(len(self.cells[i])):
-                yield self.cells[i][j]
-
-    def set_values(self, values):
-        for cell, value in zip(self, values):
-            cell.value= value
-
-    def refresh_all(self):
-        for cell in self:
-            cell.refresh()
-
     def nextMove(self, key):
+        """Advance game one step, using key press"""
         state= self.getState()
         if key == curses.KEY_LEFT:
             self.leftMove()
@@ -95,62 +58,99 @@ class Grid(object):
             self.loseRoutine()
         self.refresh_all()
 
+    def create_cells(self):
+        """Initiliaze the cells of the game, one Cell object in each tile of
+        the Grid"""
+        for i in xrange(len(self.cells)):
+            for j in xrange(len(self.cells[i])):
+                self.cells[i][j]= Cell(self.window, self.height, self.width, 
+                        self.y+i*self.height, self.x+j*self.width)
+
+    def __iter__(self):
+        """Iterate through each cell, row by row"""
+        for i in xrange(len(self.cells)):
+            for j in xrange(len(self.cells[i])):
+                yield self.cells[i][j]
+
+    def set_values(self, values):
+        """Set the values of each cell using a list"""
+        for cell, value in zip(self, values):
+            cell.value= value
+
+    def refresh_all(self):
+        """Refresh all cells"""
+        for cell in self:
+            cell.refresh()
+
     def getState(self):
-        """Returns list representation of all values"""
+        """Return list representation of all values"""
         return [self.getRowValues(i) for i in range(len(self.cells))]
 
     def illegalMove(self, previous_state):
-        """Returns previous_state == current state"""
+        """Return previous_state == current state"""
         return previous_state == self.getState()
 
     def getRow(self, row):
+        """Return list of cells in row"""
         return self.cells[row]
 
     def getRowValues(self, row):
+        """Return list of values of each cell in row"""
         return [cell.value for cell in self.getRow(row)]
 
     def setRowValues(self, row, values):
+        """Set values of each cell in row using list"""
         for val, cel in zip(values, self.getRow(row)):
             cel.value= val
 
     def getCol(self, col):
+        """Return list of cells in column"""
         return [self.cells[i][col] for i in xrange(len(self.cells))]
 
     def getColValues(self, col):
+        """Return list of values of each cell in column"""
         return [cell.value for cell in self.getCol(col)]
 
     def setColValues(self, col, values):
+        """Set values of each cell in column using list"""
         for val, cel in zip(values, self.getCol(col)):
             cel.value= val
 
     def rightMove(self):
+        """Shift cells right"""
         for i in range(len(self.cells)):
             row= self.getRowValues(i)[::-1]
             output= collapse_tiles(row)
             self.setRowValues(i, output[::-1])
 
     def leftMove(self):
+        """Shift cells left"""
         for i in range(len(self.cells)):
             row= self.getRowValues(i)
             output= collapse_tiles(row)
             self.setRowValues(i, output)
 
     def upMove(self):
+        """Shift cells up"""
         for i in range(len(self.cells[0])):
             col= self.getColValues(i)
             output= collapse_tiles(col)
             self.setColValues(i, output)
 
     def downMove(self):
+        """Shift cells down"""
         for i in range(len(self.cells[0])):
             col= self.getColValues(i)[::-1]
             output= collapse_tiles(col)
             self.setColValues(i, output[::-1])
 
     def isWinner(self):
+        """Return 2048 in any cell"""
         return False
 
     def insertRandom(self):
+        """Insert 2 or 4 into any unoccupied cell.
+        Return 'method was able to find unoccupied cell'"""
         available= [(x/4, x%4) for x, cell in enumerate(self) if not cell.value]
         if not available:
             return False
@@ -158,9 +158,13 @@ class Grid(object):
         self.cells[row][col].value= random.choice([2, 4])
         return True
 
+
+
 class Cell(object):
+    """A Cell represents a tile in the Grid."""
 
     def __init__(self, window, height, width, y, x):
+        """Initialize a Cell object"""
         self.parent= window
         self.height= height
         self.width= width
@@ -172,6 +176,7 @@ class Cell(object):
         self.value= 0
 
     def refresh(self):
+        """Refresh cell with new value"""
         self.window.erase()
         prval= str(self.value if self.value else ' ')
         if prval == ' ':
@@ -183,13 +188,17 @@ class Cell(object):
 
     @staticmethod
     def compute_color(power2):
+        """[Deprecated] Return a color integer according to log2(self.value)"""
         i= 20
         while power2:
             power2>>= 1
             i+= 1
         return i
 
+
+
 def main(stdscr):
+    """Mainloop for program"""
     curses.curs_set(0)
     curses.use_default_colors()
     grid= Grid(stdscr, width=6, height=3)
