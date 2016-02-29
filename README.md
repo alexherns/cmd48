@@ -1,6 +1,8 @@
 #cmd48
 Python-implementation of the tile shifting classic, 2048.
 
+![Gamplay](/img/game_fig?raw=true)
+
 ##Installation
 Simply download app.py and you're good to go!
 
