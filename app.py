@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import curses
 import random
+import logging
+logging.basicConfig(filename='logging.txt', level=logging.DEBUG)
 
 def collapse_tiles(l):
     """Collapse list of 4 tiles in 2048-style"""
@@ -18,6 +20,8 @@ def collapse_tiles(l):
     while len(output) < 4:
         output.append(0)
     return output
+
+
 
 class Grid(object):
     """The Grid maintains the tiles and functions necessary for playing the
@@ -54,9 +58,16 @@ class Grid(object):
             self.won= True
             self.winRoutine()
         if self.illegalMove(state):
-            return
-        if not self.insertRandom():
-            self.loseRoutine()
+            if self.isLoser():
+                self.loseRoutine()
+                self.refresh_all()
+                curses.beep()
+                return
+            else:
+                curses.beep()
+                return
+        else:
+            self.insertRandom()
         self.refresh_all()
 
     def create_cells(self):
@@ -147,17 +158,61 @@ class Grid(object):
 
     def isWinner(self):
         """Return 2048 in any cell"""
-        return False
+        for cell in self:
+            if cell.value == 2048:
+                return True
+
+    def isLoser(self):
+        """Return no possible moves"""
+        #Check for non-full board
+        if [cell for cell in self if not cell.value] != []:
+            return False
+        #Check for collapsible rows
+        for i in range(len(self.cells)):
+            if collapse_tiles(self.getRowValues(i))[-1] == 0:
+                return False
+        #Check for collapsible columns
+        for j in range(len(self.cells[0])):
+            if collapse_tiles(self.getColValues(j))[-1] == 0:
+                return False
+        return True
+
+    def winRoutine(self):
+        """Creates a win dialog box, and allows you to keep playing"""
+        alert= Alert(self.window, 'YOU WIN!')
+        alert.draw()
+        alert.refresh()
+        while True:
+            key= alert.window.getch()
+            if key == ord('q'):
+                alert= None
+                break
+
+    def loseRoutine(self):
+        """Creates a lose dialog box, the game is not over"""
+        alert= Alert(self.window, 'GAME OVER\nScore: {0}'.format(\
+                str(self.tallyScore())))
+        alert.draw()
+        alert.refresh()
+        while True:
+            key= alert.window.getch()
+            if key == ord('q'):
+                alert= None
+                break
 
     def insertRandom(self):
         """Insert 2 or 4 into any unoccupied cell.
         Return 'method was able to find unoccupied cell'"""
         available= [(x/4, x%4) for x, cell in enumerate(self) if not cell.value]
-        if not available:
+        if available == []:
             return False
         row, col= random.choice(available)
         self.cells[row][col].value= random.choice([2, 4])
         return True
+
+    def tallyScore(self):
+        """Sums the score of each tile"""
+        return sum(cell.value for cell in self)
 
 
 
@@ -198,10 +253,97 @@ class Cell(object):
 
 
 
+class Alert(object):
+    """An Alert represents a window with simple dismissal functions"""
+
+    def __init__(self, window, message, **kwargs):
+        """Initialize an Alert. By default, center within the parent window"""
+        self.parent= window
+        self.message= message
+        parheight, parwidth= self.parent.getmaxyx()
+        self.width, self.height= Alert.messageDimensions(message, parwidth-2,
+                parheight-2)
+        self.width+= 2
+        self.height+= 2
+        kwarg_mapper(self, kwargs, 'x', (parwidth-self.width)/2)
+        kwarg_mapper(self, kwargs, 'y', (parheight-self.height)/2)
+
+    def draw(self):
+        """Draws window, border, and message for alert"""
+        self.window= self.parent.subwin(self.height, self.width, self.y, self.x)
+        self.window.border('#', '#', '#', '#', '#', '#', '#', '#')
+        self.setMessage()
+
+    def setMessage(self, message=None):
+        """Adds strings to the message window, padding with spaces to cover
+        background objects"""
+        if not message:
+            message= self.message
+        lineNum= 1
+        for line in Alert.splitMessage(self.message, self.width, self.height):
+            line= line + (self.width-2-len(line))*' '
+            self.window.addstr(lineNum, 1, line)
+            lineNum+= 1
+    
+    @staticmethod
+    def splitMessage(s, maxW, maxH):
+        """Splits the message into lines according to a rigid width and
+        potential linebreaks in the message itself"""
+        message= []
+        for line in s.splitlines():
+            while line:
+                message.append(line[:maxW])
+                line= line[maxW:]
+        return message
+
+    @staticmethod
+    def messageDimensions(s, maxW, maxH):
+        """Returns the dimensions of a message, according to a rigid width and
+        potential linebreaks in the message itself"""
+        width, height= 0, 0
+        for line in Alert.splitMessage(s, maxW, maxH):
+            width= max(width, len(line[:maxW]))
+            height+= 1
+        return width, height
+
+
+    def refresh(self):
+        """Refreshes window"""
+        self.window.refresh()
+
+
+
+class LoserAlert(Alert):
+
+    def handleKey(self, key):
+        if key == ord('q'): # quit application
+            pass
+        elif key == curses.KEY_ENTER: # dismiss window
+            self.dismiss()
+        elif key == ord('n'): # create new game
+            pass 
+
+
+
+#class Menu(object):
+
+
+def kwarg_mapper(obj, kwargs, check_arg, alternate):
+    """Automates use of kwargs by handling cases when the check_arg not
+    specified in kwargs, but you want to provide an alternate"""
+    if check_arg in kwargs:
+        setattr(obj, check_arg, kwargs[check_arg])
+    else:
+        setattr(obj, check_arg, alternate)
+
+#def menuloop(grid, stdscr):
+    
+
 def main(stdscr):
     """Mainloop for program"""
     curses.curs_set(0)
     curses.use_default_colors()
+    curses.resizeterm(30, 100)
     grid= Grid(stdscr, width=6, height=3)
     grid.window.refresh() 
     grid.insertRandom()
@@ -211,6 +353,9 @@ def main(stdscr):
         press= stdscr.getch()
         if press == ord('q'):
             break
+        elif press == ord('m'):
+            pass
+            #menuloop(grid, stdscr)
         else:
             grid.nextMove(press)
 
